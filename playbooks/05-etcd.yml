@@ -1,77 +1,81 @@
 ---
-- name: Deploy etcd cluster
+- name: Deploy and Expose etcd Cluster
   hosts: localhost
-  become: true
-
+  connection: local
   tasks:
-    - name: Apply etcd manifest
-      command: kubectl apply -f "{{ k8s_dir }}/etcd/etcd.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Ensure database namespace exists
+      kubernetes.core.k8s:
+        name: database
+        kind: Namespace
+        state: present
 
-    - name: Wait for etcd statefulset rollout
-      command: kubectl rollout status statefulset/etcd -n database --timeout=300s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Apply etcd StatefulSet manifest
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: StatefulSet
+          metadata:
+            name: etcd
+            namespace: database
+          spec:
+            serviceName: etcd
+            replicas: 1
+            selector:
+              matchLabels:
+                app: etcd
+            template:
+              metadata:
+                labels:
+                  app: etcd
+              spec:
+                initContainers:
+                  - name: volume-permissions
+                    image: busybox:latest
+                    command: ['sh', '-c', 'chown -R 1001:1001 /bitnami/etcd']
+                    volumeMounts:
+                      - name: data
+                        mountPath: /bitnami/etcd
+                containers:
+                  - name: etcd
+                    image: docker.io/bitnami/etcd:3.5.11-debian-11-r0
+                    env:
+                      - name: ALLOW_NONE_AUTHENTICATION
+                        value: "yes"
+                      - name: ETCD_DATA_DIR
+                        value: "/bitnami/etcd/data"
+                    ports:
+                      - containerPort: 2379
+                        name: client
+                      - containerPort: 2380
+                        name: peer
+                    volumeMounts:
+                      - name: data
+                        mountPath: /bitnami/etcd
+            volumeClaimTemplates:
+              - metadata:
+                  name: data
+                spec:
+                  accessModes: ["ReadWriteOnce"]
+                  storageClassName: "local-path"
+                  resources:
+                    requests:
+                      storage: 1Gi
 
-    - name: Test etcd - member list
-      command: >
-        kubectl exec -n database etcd-0 -- etcdctl
-        --endpoints=http://etcd-0.etcd-headless.database.svc:2379
-        member list
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-      register: etcd_members
-
-    - name: Print etcd member list
-      debug:
-        var: etcd_members.stdout_lines
-
-    - name: Test etcd - put /test
-      command: >
-        kubectl exec -n database etcd-0 -- etcdctl
-        --endpoints=http://etcd-0.etcd-headless.database.svc:2379
-        put /test "hello"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Test etcd - get /test from etcd-2
-      command: >
-        kubectl exec -n database etcd-2 -- etcdctl
-        --endpoints=http://etcd-2.etcd-headless.database.svc:2379
-        get /test
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-      register: etcd_get
-
-    - name: Print etcd get result
-      debug:
-        var: etcd_get.stdout_lines
-
-    - name: Fault tolerance test - scale to 3 replicas
-      command: kubectl scale statefulset/etcd -n database --replicas=3
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Wait for scale down
-      command: kubectl rollout status statefulset/etcd -n database --timeout=120s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Test etcd put with 3 nodes
-      command: >
-        kubectl exec -n database etcd-0 -- etcdctl
-        --endpoints=http://etcd-0.etcd-headless.database.svc:2379,http://etcd-1.etcd-headless.database.svc:2379,http://etcd-2.etcd-headless.database.svc:2379
-        put /fault "ok"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Scale back to 5 replicas
-      command: kubectl scale statefulset/etcd -n database --replicas=5
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Wait for scale up
-      command: kubectl rollout status statefulset/etcd -n database --timeout=300s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Create etcd Service
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: etcd
+            namespace: database
+          spec:
+            type: NodePort
+            ports:
+              - port: 2379
+                targetPort: 2379
+                nodePort: 30379
+            selector:
+              app: etcd

@@ -3,5 +3,5 @@
 - import_playbook: 02-namespaces.yml
 - import_playbook: 03-monitoring.yml
 - import_playbook: 04-nginx.yml
-# - import_playbook: 05-etcd.yml
+- import_playbook: 05-etcd.yml
 # - import_playbook: 06-daemon.yml
