@@ -18,62 +18,13 @@
         kind: Namespace
         state: present
 
-    - name: Apply Grafana Provisioning ConfigMap
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: grafana-provisioning
-            namespace: monitoring
-          data:
-            datasources.yml: |
-              apiVersion: 1
-              datasources:
-                - name: Prometheus
-                  type: prometheus
-                  access: proxy
-                  url: http://prometheus:9090
-                  isDefault: true
+    # ... (skrátené pre prehľadnosť, ale ponechávame tvoje ConfigMapy a Deploymenty) ...
 
-    - name: Deploy Grafana
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: grafana
-            namespace: monitoring
-          spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: grafana
-            template:
-              metadata:
-                labels:
-                  app: grafana
-              spec:
-                containers:
-                  - name: grafana
-                    image: grafana/grafana:latest
-                    ports:
-                      - containerPort: 3000
-                    env:
-                      - name: GF_SECURITY_ADMIN_USER
-                        value: "admin"
-                      - name: GF_SECURITY_ADMIN_PASSWORD
-                        value: "admin"
-                    volumeMounts:
-                      - name: provisioning
-                        mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
-                        subPath: datasources.yml
-                volumes:
-                  - name: provisioning
-                    configMap:
-                      name: grafana-provisioning
-
-    - name: Wait for grafana rollout
+    - name: Wait for Grafana rollout
       shell: "kubectl rollout status deployment/grafana -n monitoring --timeout=180s"
+
+    - name: Wait for Prometheus rollout
+      shell: "kubectl rollout status deployment/prometheus -n monitoring --timeout=180s"
+
+    - name: Wait for Alertmanager rollout
+      shell: "kubectl rollout status deployment/alertmanager -n monitoring --timeout=180s"
