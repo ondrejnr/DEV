@@ -1,0 +1,15 @@
+---
+- name: Setup Grafana Dashboards
+  hosts: localhost
+  tasks:
+    - name: Import Node Exporter Dashboard (ID 1860)
+      community.grafana.grafana_dashboard:
+        url: "http://35.198.73.31:30030"
+        grafana_user: "admin"
+        grafana_password: "admin"
+        state: present
+        commit_message: "Updated via Ansible"
+        overwrite: true
+        org_id: 1
+        dashboard_id: 1860
+        datasource: "Prometheus"

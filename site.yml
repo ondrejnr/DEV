@@ -5,3 +5,4 @@
 - import_playbook: playbooks/04-nginx.yml
 - import_playbook: playbooks/05-etcd.yml
 - import_playbook: playbooks/nginx-english-dashboard.yml
+- import_playbook: playbooks/07-grafana-dashboards.yml
