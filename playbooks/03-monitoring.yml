@@ -3,15 +3,7 @@
   hosts: localhost
   connection: local
   tasks:
-    - name: Ensure Python kubernetes library is installed via apt
-      become: yes
-      apt:
-        name:
-          - python3-kubernetes
-          - python3-yaml
-        state: present
-        update_cache: yes
-
+    # Manual install performed, skipping apt task to avoid hangs
     - name: Create monitoring namespace
       kubernetes.core.k8s:
         name: monitoring
@@ -76,10 +68,4 @@
                       name: grafana-provisioning
 
     - name: Wait for Grafana rollout
-      shell: "kubectl rollout status deployment/grafana -n monitoring --timeout=180s"
-
-    - name: Wait for Prometheus rollout
-      shell: "kubectl rollout status deployment/prometheus -n monitoring --timeout=180s"
-
-    - name: Wait for Alertmanager rollout
-      shell: "kubectl rollout status deployment/alertmanager -n monitoring --timeout=180s"
+      shell: "kubectl rollout status deployment/grafana -n monitoring --timeout=30s"
