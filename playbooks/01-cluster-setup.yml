@@ -1,0 +1,31 @@
+---
+- name: Initialize Kubernetes Cluster
+  hosts: all
+  become: yes
+  tasks:
+    - name: Configure containerd to use systemd cgroup
+      shell: |
+        mkdir -p /etc/containerd
+        containerd config default | tee /etc/containerd/config.toml
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/g' /etc/containerd/config.toml
+      notify: restart containerd
+
+    - name: Reset existing cluster if any
+      command: kubeadm reset -f
+      ignore_errors: yes
+
+    - name: Initialize control plane
+      command: kubeadm init --pod-network-cidr=10.244.0.0/16 --ignore-preflight-errors=all
+      register: kubeinit
+
+    - name: Setup kubeconfig for root
+      shell: |
+        mkdir -p $HOME/.kube
+        cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+        chown $(id -u):$(id -g) $HOME/.kube/config
+
+  handlers:
+    - name: restart containerd
+      service:
+        name: containerd
+        state: restarted

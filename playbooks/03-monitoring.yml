@@ -18,29 +18,6 @@
         kind: Namespace
         state: present
 
-    # ... zvyšok súboru zostáva rovnaký ...
-    - name: Apply Grafana Dashboards ConfigMap
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: ConfigMap
-          metadata:
-            name: grafana-dashboards
-            namespace: monitoring
-          data:
-            dashboards.yml: |
-              apiVersion: 1
-              providers:
-                - name: 'default'
-                  orgId: 1
-                  folder: ''
-                  type: file
-                  disableDeletion: false
-                  editable: true
-                  options:
-                    path: /var/lib/grafana/dashboards
-
     - name: Apply Grafana Provisioning ConfigMap
       kubernetes.core.k8s:
         state: present
@@ -93,21 +70,10 @@
                       - name: provisioning
                         mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
                         subPath: datasources.yml
-                      - name: provisioning-dashboards
-                        mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
-                        subPath: dashboards.yml
-                      - name: dashboards
-                        mountPath: /var/lib/grafana/dashboards
                 volumes:
                   - name: provisioning
                     configMap:
                       name: grafana-provisioning
-                  - name: provisioning-dashboards
-                    configMap:
-                      name: grafana-provisioning
-                  - name: dashboards
-                    configMap:
-                      name: grafana-dashboards
 
     - name: Wait for grafana rollout
       shell: "kubectl rollout status deployment/grafana -n monitoring --timeout=180s"
