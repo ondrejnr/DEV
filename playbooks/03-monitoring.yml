@@ -1,0 +1,60 @@
+---
+- name: Deploy monitoring stack
+  hosts: localhost
+  become: true
+
+  tasks:
+    - name: Apply prometheus configmap
+      command: kubectl apply -f "{{ k8s_dir }}/monitoring/prometheus-configmap.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Apply prometheus deployment
+      command: kubectl apply -f "{{ k8s_dir }}/monitoring/prometheus-deployment.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for prometheus rollout
+      command: kubectl rollout status deployment/prometheus -n monitoring --timeout=180s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Apply alertmanager
+      command: kubectl apply -f "{{ k8s_dir }}/monitoring/alertmanager.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for alertmanager rollout
+      command: kubectl rollout status deployment/alertmanager -n monitoring --timeout=180s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Apply grafana
+      command: kubectl apply -f "{{ k8s_dir }}/monitoring/grafana.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for grafana rollout
+      command: kubectl rollout status deployment/grafana -n monitoring --timeout=180s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Apply node-exporter
+      command: kubectl apply -f "{{ k8s_dir }}/monitoring/node-exporter.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for node-exporter daemonset rollout
+      command: kubectl rollout status daemonset/node-exporter -n monitoring --timeout=180s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Apply nginx-exporter
+      command: kubectl apply -f "{{ k8s_dir }}/monitoring/nginx-exporter.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for nginx-exporter rollout
+      command: kubectl rollout status deployment/nginx-exporter -n web --timeout=180s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"

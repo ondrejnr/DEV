@@ -1,0 +1,10 @@
+---
+- name: Create Kubernetes namespaces
+  hosts: localhost
+  become: true
+
+  tasks:
+    - name: Apply namespaces manifest
+      command: kubectl apply -f "{{ k8s_dir }}/namespaces.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
