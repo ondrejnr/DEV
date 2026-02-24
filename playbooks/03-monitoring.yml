@@ -1,60 +1,103 @@
 ---
-- name: Deploy monitoring stack
+- name: Setup Monitoring (Prometheus & Grafana)
   hosts: localhost
-  become: true
-
+  connection: local
   tasks:
-    - name: Apply prometheus configmap
-      command: kubectl apply -f "{{ k8s_dir }}/monitoring/prometheus-configmap.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Create monitoring namespace
+      kubernetes.core.k8s:
+        name: monitoring
+        kind: Namespace
+        state: present
 
-    - name: Apply prometheus deployment
-      command: kubectl apply -f "{{ k8s_dir }}/monitoring/prometheus-deployment.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Apply Grafana Dashboards ConfigMap
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: grafana-dashboards
+            namespace: monitoring
+          data:
+            dashboards.yml: |
+              apiVersion: 1
+              providers:
+                - name: 'default'
+                  orgId: 1
+                  folder: ''
+                  type: file
+                  disableDeletion: false
+                  editable: true
+                  options:
+                    path: /var/lib/grafana/dashboards
 
-    - name: Wait for prometheus rollout
-      command: kubectl rollout status deployment/prometheus -n monitoring --timeout=180s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Apply Grafana Provisioning ConfigMap
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: grafana-provisioning
+            namespace: monitoring
+          data:
+            datasources.yml: |
+              apiVersion: 1
+              datasources:
+                - name: Prometheus
+                  type: prometheus
+                  access: proxy
+                  url: http://prometheus:9090
+                  isDefault: true
 
-    - name: Apply alertmanager
-      command: kubectl apply -f "{{ k8s_dir }}/monitoring/alertmanager.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Wait for alertmanager rollout
-      command: kubectl rollout status deployment/alertmanager -n monitoring --timeout=180s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Apply grafana
-      command: kubectl apply -f "{{ k8s_dir }}/monitoring/grafana.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Deploy Grafana
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: grafana
+            namespace: monitoring
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: grafana
+            template:
+              metadata:
+                labels:
+                  app: grafana
+              spec:
+                containers:
+                  - name: grafana
+                    image: grafana/grafana:latest
+                    ports:
+                      - containerPort: 3000
+                    env:
+                      - name: GF_SECURITY_ADMIN_USER
+                        value: "admin"
+                      - name: GF_SECURITY_ADMIN_PASSWORD
+                        value: "admin"
+                    volumeMounts:
+                      - name: provisioning
+                        mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+                        subPath: datasources.yml
+                      - name: provisioning-dashboards
+                        mountPath: /etc/grafana/provisioning/dashboards/dashboards.yaml
+                        subPath: dashboards.yml
+                      - name: dashboards
+                        mountPath: /var/lib/grafana/dashboards
+                volumes:
+                  - name: provisioning
+                    configMap:
+                      name: grafana-provisioning
+                  - name: provisioning-dashboards
+                    configMap:
+                      name: grafana-provisioning
+                  - name: dashboards
+                    configMap:
+                      name: grafana-dashboards
 
     - name: Wait for grafana rollout
-      command: kubectl rollout status deployment/grafana -n monitoring --timeout=180s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Apply node-exporter
-      command: kubectl apply -f "{{ k8s_dir }}/monitoring/node-exporter.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Wait for node-exporter daemonset rollout
-      command: kubectl rollout status daemonset/node-exporter -n monitoring --timeout=180s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Apply nginx-exporter
-      command: kubectl apply -f "{{ k8s_dir }}/monitoring/nginx-exporter.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Wait for nginx-exporter rollout
-      command: kubectl rollout status deployment/nginx-exporter -n web --timeout=180s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+      shell: "kubectl rollout status deployment/grafana -n monitoring --timeout=180s"
