@@ -13,37 +13,38 @@ data:
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
             body { background-color: #f4f7f9; padding-top: 50px; }
-            .card { border: none; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 20px; text-align: center; }
+            .card { border: none; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 20px; text-align: center; min-height: 180px; }
             .metric-value { font-size: 2.5rem; font-weight: bold; color: #0d6efd; }
             .status-ok { color: #22c55e; font-size: 0.9rem; }
+            .status-err { color: #dc3545; font-size: 0.9rem; }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="text-center mb-5">
                 <h1>🚀 K8s Real-Time Dashboard</h1>
-                <p class="text-muted">Fetching live data from Prometheus</p>
+                <p class="text-muted">Fetching live data from Prometheus via Nginx Ingress</p>
             </div>
             <div class="row">
                 <div class="col-md-4">
                     <div class="card p-4">
-                        <h5>Node IP</h5>
-                        <div class="metric-value" style="font-size: 1.5rem;">35.198.73.31</div>
-                        <div class="status-ok">● Connected</div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="card p-4">
                         <h5>Node CPU Usage</h5>
                         <div id="cpu-usage" class="metric-value">...</div>
-                        <div class="text-muted small">Updated every 5s</div>
+                        <div class="text-muted small">1m average</div>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="card p-4">
-                        <h5>Prometheus API</h5>
+                        <h5>Node RAM Usage</h5>
+                        <div id="ram-usage" class="metric-value">...</div>
+                        <div class="text-muted small">Total system memory</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card p-4">
+                        <h5>System Status</h5>
                         <div id="prom-status" class="metric-value" style="font-size: 1.5rem;">Checking...</div>
-                        <div id="prom-subtext" class="small">Via Ingress Proxy</div>
+                        <div id="prom-subtext" class="small">API Connection</div>
                     </div>
                 </div>
             </div>
@@ -53,31 +54,41 @@ data:
             async function fetchMetrics() {
                 const promUrl = '/api/v1/query?query=';
                 
-                // Query for Node CPU usage (1 minute average)
+                // Queries
                 const cpuQuery = "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode='idle'}[1m])) * 100)";
+                const ramQuery = "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100";
 
                 try {
-                    const response = await fetch(promUrl + encodeURIComponent(cpuQuery));
-                    const data = await response.json();
+                    // Fetch CPU
+                    const cpuRes = await fetch(promUrl + encodeURIComponent(cpuQuery));
+                    const cpuData = await cpuRes.json();
                     
-                    if (data.status === "success" && data.data.result.length > 0) {
-                        const val = parseFloat(data.data.result[0].value[1]).toFixed(2);
-                        document.getElementById('cpu-usage').innerText = val + "%";
-                        document.getElementById('prom-status').innerText = "UP";
-                        document.getElementById('prom-status').style.color = "#22c55e";
-                    } else {
-                        document.getElementById('cpu-usage').innerText = "N/A";
+                    // Fetch RAM
+                    const ramRes = await fetch(promUrl + encodeURIComponent(ramQuery));
+                    const ramData = await ramRes.json();
+                    
+                    if (cpuData.status === "success" && cpuData.data.result.length > 0) {
+                        const cpuVal = parseFloat(cpuData.data.result[0].value[1]).toFixed(2);
+                        document.getElementById('cpu-usage').innerText = cpuVal + "%";
                     }
+
+                    if (ramData.status === "success" && ramData.data.result.length > 0) {
+                        const ramVal = parseFloat(ramData.data.result[0].value[1]).toFixed(2);
+                        document.getElementById('ram-usage').innerText = ramVal + "%";
+                    }
+
+                    document.getElementById('prom-status').innerText = "ONLINE";
+                    document.getElementById('prom-status').style.color = "#22c55e";
+                    document.getElementById('prom-subtext').innerText = "Connected to Prometheus";
+
                 } catch (err) {
                     console.error("Prometheus error:", err);
                     document.getElementById('prom-status').innerText = "OFFLINE";
                     document.getElementById('prom-status').style.color = "#dc3545";
-                    document.getElementById('cpu-usage').innerText = "ERR";
-                    document.getElementById('prom-subtext').innerText = "Check Proxy/Ingress";
+                    document.getElementById('prom-subtext').innerText = "Check Ingress/Proxy";
                 }
             }
 
-            // Initial fetch and set interval
             fetchMetrics();
             setInterval(fetchMetrics, 5000);
         </script>
