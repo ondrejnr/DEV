@@ -1,0 +1,45 @@
+---
+- name: Deploy daemon checker
+  hosts: localhost
+  become: true
+
+  tasks:
+    - name: Apply daemon manifest
+      command: kubectl apply -f "{{ k8s_dir }}/daemon/daemon.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for daemon rollout
+      command: kubectl rollout status deployment/daemon-checker -n daemon --timeout=180s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Pause to allow daemon to collect data
+      pause:
+        seconds: 45
+
+    - name: Get daemon pod name
+      command: kubectl get pod -n daemon -l app=daemon-checker -o jsonpath='{.items[0].metadata.name}'
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: daemon_pod
+
+    - name: Check svstat
+      command: "kubectl exec -n daemon {{ daemon_pod.stdout }} -- svstat /service/health-checker"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: svstat_output
+
+    - name: Print svstat output
+      debug:
+        var: svstat_output.stdout
+
+    - name: Tail daemon logs
+      command: "kubectl exec -n daemon {{ daemon_pod.stdout }} -- tail -n 20 /var/log/health-checker/current"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: daemon_logs
+
+    - name: Print daemon logs
+      debug:
+        var: daemon_logs.stdout_lines

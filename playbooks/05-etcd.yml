@@ -1,0 +1,77 @@
+---
+- name: Deploy etcd cluster
+  hosts: localhost
+  become: true
+
+  tasks:
+    - name: Apply etcd manifest
+      command: kubectl apply -f "{{ k8s_dir }}/etcd/etcd.yml"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for etcd statefulset rollout
+      command: kubectl rollout status statefulset/etcd -n database --timeout=300s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Test etcd - member list
+      command: >
+        kubectl exec -n database etcd-0 -- etcdctl
+        --endpoints=http://etcd-0.etcd-headless.database.svc:2379
+        member list
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: etcd_members
+
+    - name: Print etcd member list
+      debug:
+        var: etcd_members.stdout_lines
+
+    - name: Test etcd - put /test
+      command: >
+        kubectl exec -n database etcd-0 -- etcdctl
+        --endpoints=http://etcd-0.etcd-headless.database.svc:2379
+        put /test "hello"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Test etcd - get /test from etcd-2
+      command: >
+        kubectl exec -n database etcd-2 -- etcdctl
+        --endpoints=http://etcd-2.etcd-headless.database.svc:2379
+        get /test
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+      register: etcd_get
+
+    - name: Print etcd get result
+      debug:
+        var: etcd_get.stdout_lines
+
+    - name: Fault tolerance test - scale to 3 replicas
+      command: kubectl scale statefulset/etcd -n database --replicas=3
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for scale down
+      command: kubectl rollout status statefulset/etcd -n database --timeout=120s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Test etcd put with 3 nodes
+      command: >
+        kubectl exec -n database etcd-0 -- etcdctl
+        --endpoints=http://etcd-0.etcd-headless.database.svc:2379,http://etcd-1.etcd-headless.database.svc:2379,http://etcd-2.etcd-headless.database.svc:2379
+        put /fault "ok"
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Scale back to 5 replicas
+      command: kubectl scale statefulset/etcd -n database --replicas=5
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"
+
+    - name: Wait for scale up
+      command: kubectl rollout status statefulset/etcd -n database --timeout=300s
+      environment:
+        KUBECONFIG: "{{ kubeconfig }}"

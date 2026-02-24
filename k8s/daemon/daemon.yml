@@ -1,0 +1,151 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: daemon-scripts
+  namespace: daemon
+data:
+  health-checker.py: |
+    #!/usr/bin/env python3
+    import time
+    import urllib.request
+    import urllib.error
+    import json
+    import os
+    import sys
+
+    LOG_DIR = "/var/log/health-checker"
+    LOG_FILE = os.path.join(LOG_DIR, "status.log")
+    os.makedirs(LOG_DIR, exist_ok=True)
+
+    def check_prometheus():
+        results = {}
+        metrics = {
+            "node_load1": "node_load1",
+            "node_load5": "node_load5",
+            "node_load15": "node_load15",
+        }
+        for name, query in metrics.items():
+            try:
+                url = f"http://prometheus.monitoring.svc:9090/api/v1/query?query={query}"
+                with urllib.request.urlopen(url, timeout=5) as resp:
+                    data = json.loads(resp.read())
+                    val = data["data"]["result"]
+                    if val:
+                        results[name] = val[0]["value"][1]
+                    else:
+                        results[name] = "no_data"
+            except Exception as e:
+                results[name] = f"error:{e}"
+        return results
+
+    def check_nginx():
+        results = {}
+        endpoints = {
+            "nginx_webserver": "http://nginx-webserver.web.svc:80/nginx_status",
+            "nginx_proxy": "http://nginx-proxy.web.svc:80/nginx_status",
+        }
+        for name, url in endpoints.items():
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "health-checker/1.0"})
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    body = resp.read().decode()
+                    first_line = body.strip().split("\n")[0]
+                    results[name] = f"ok active_connections={first_line.split()[-1]}"
+            except Exception as e:
+                results[name] = f"error:{e}"
+        return results
+
+    def check_etcd():
+        results = {}
+        for i in range(5):
+            url = f"http://etcd-{i}.etcd-headless.database.svc:2379/health"
+            try:
+                with urllib.request.urlopen(url, timeout=5) as resp:
+                    data = json.loads(resp.read())
+                    results[f"etcd_{i}_health"] = data.get("health", "unknown")
+            except Exception as e:
+                results[f"etcd_{i}_health"] = f"error:{e}"
+        for i in range(5):
+            url = f"http://etcd-{i}.etcd-headless.database.svc:2379/v2/members"
+            try:
+                with urllib.request.urlopen(url, timeout=5) as resp:
+                    data = json.loads(resp.read())
+                    results[f"etcd_{i}_members"] = len(data.get("members", []))
+                break
+            except Exception as e:
+                results[f"etcd_{i}_members"] = f"error:{e}"
+        return results
+
+    while True:
+        ts = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        prom = check_prometheus()
+        nginx = check_nginx()
+        etcd = check_etcd()
+
+        lines = [f"timestamp={ts}"]
+        for k, v in prom.items():
+            lines.append(f"{k}={v}")
+        for k, v in nginx.items():
+            lines.append(f"{k}={v}")
+        for k, v in etcd.items():
+            lines.append(f"{k}={v}")
+
+        output = " ".join(lines)
+        print(output, flush=True)
+        with open(LOG_FILE, "a") as f:
+            f.write(output + "\n")
+
+        time.sleep(30)
+
+  run: |
+    #!/bin/sh
+    exec 2>&1
+    exec python3 /opt/daemon/health-checker.py
+
+  log-run: |
+    #!/bin/sh
+    exec multilog t s1000000 n10 /var/log/health-checker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: daemon-checker
+  namespace: daemon
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: daemon-checker
+  template:
+    metadata:
+      labels:
+        app: daemon-checker
+    spec:
+      containers:
+        - name: daemon
+          image: debian:bookworm
+          command:
+            - /bin/bash
+            - -c
+            - |
+              apt-get update -qq && apt-get install -y -qq python3 daemontools
+              mkdir -p /opt/daemon/log
+              cp /config/health-checker.py /opt/daemon/health-checker.py
+              cp /config/run /opt/daemon/run
+              cp /config/log-run /opt/daemon/log/run
+              chmod +x /opt/daemon/run /opt/daemon/log/run
+              ln -sf /opt/daemon /service/health-checker
+              exec svscanboot
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          resources:
+            requests:
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: daemon-scripts
