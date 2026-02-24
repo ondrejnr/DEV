@@ -1,25 +1,58 @@
 ---
-- name: Deploy Nginx web servers
-  hosts: localhost
-  become: true
-
+- name: Deploy Nginx Webserver
+  hosts: all
+  become: false
   tasks:
-    - name: Apply nginx webserver
-      command: kubectl apply -f "{{ k8s_dir }}/nginx/webserver.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Wait for nginx webserver rollout
-      command: kubectl rollout status deployment/nginx-webserver -n web --timeout=180s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Apply nginx proxy
-      command: kubectl apply -f "{{ k8s_dir }}/nginx/proxy.yml"
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
-
-    - name: Wait for nginx proxy rollout
-      command: kubectl rollout status deployment/nginx-proxy -n web --timeout=180s
-      environment:
-        KUBECONFIG: "{{ kubeconfig }}"
+    - name: Apply Nginx Webserver Manifests
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: nginx-webserver
+            namespace: web
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                app: nginx-webserver
+            template:
+              metadata:
+                labels:
+                  app: nginx-webserver
+              spec:
+                containers:
+                - name: nginx
+                  image: nginx:latest
+                  ports:
+                  - containerPort: 80
+                  volumeMounts:
+                  - name: config-volume
+                    mountPath: /usr/share/nginx/html/index.html
+                    subPath: index.html
+                volumes:
+                - name: config-volume
+                  configMap:
+                    name: nginx-english-config
+---
+- name: Deploy Nginx Webserver Service
+  hosts: all
+  become: false
+  tasks:
+    - name: Create Webserver Service
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: nginx-webserver
+            namespace: web
+          spec:
+            selector:
+              app: nginx-webserver
+            ports:
+            - protocol: TCP
+              port: 80
+              targetPort: 80
