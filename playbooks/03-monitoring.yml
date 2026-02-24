@@ -3,12 +3,22 @@
   hosts: localhost
   connection: local
   tasks:
+    - name: Ensure Python kubernetes library is installed via apt
+      become: yes
+      apt:
+        name:
+          - python3-kubernetes
+          - python3-yaml
+        state: present
+        update_cache: yes
+
     - name: Create monitoring namespace
       kubernetes.core.k8s:
         name: monitoring
         kind: Namespace
         state: present
 
+    # ... zvyšok súboru zostáva rovnaký ...
     - name: Apply Grafana Dashboards ConfigMap
       kubernetes.core.k8s:
         state: present
