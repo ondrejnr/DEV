@@ -1,54 +1,29 @@
 ---
-- name: Deploy Nginx Webserver and Service
+- name: Patch Ingress Controller for Prometheus Metrics
   hosts: all
   become: false
   tasks:
-    - name: Apply Nginx Webserver Deployment
+    - name: Enable metrics and annotations on Ingress Controller
       kubernetes.core.k8s:
-        state: present
+        state: patched
+        kind: Deployment
+        name: ingress-nginx-controller
+        namespace: ingress-nginx
         definition:
-          apiVersion: apps/v1
-          kind: Deployment
-          metadata:
-            name: nginx-webserver
-            namespace: web
           spec:
-            replicas: 1
-            selector:
-              matchLabels:
-                app: nginx-webserver
             template:
               metadata:
-                labels:
-                  app: nginx-webserver
+                annotations:
+                  prometheus.io/scrape: "true"
+                  prometheus.io/port: "10254"
+                  prometheus.io/scheme: "http"
               spec:
                 containers:
-                - name: nginx
-                  image: nginx:latest
-                  ports:
-                  - containerPort: 80
-                  volumeMounts:
-                  - name: config-volume
-                    mountPath: /usr/share/nginx/html/index.html
-                    subPath: index.html
-                volumes:
-                - name: config-volume
-                  configMap:
-                    name: nginx-english-config
-
-    - name: Create Webserver Service
-      kubernetes.core.k8s:
-        state: present
-        definition:
-          apiVersion: v1
-          kind: Service
-          metadata:
-            name: nginx-webserver
-            namespace: web
-          spec:
-            selector:
-              app: nginx-webserver
-            ports:
-            - protocol: TCP
-              port: 80
-              targetPort: 80
+                - name: controller
+                  args:
+                    - /nginx-ingress-controller
+                    - --publish-service=$(POD_NAMESPACE)/ingress-nginx-controller
+                    - --election-id=ingress-controller-leader
+                    - --controller-class=k8s.io/ingress-nginx
+                    - --configmap=$(POD_NAMESPACE)/ingress-nginx-controller
+                    - --enable-metrics # This is the magic flag
