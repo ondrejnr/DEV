@@ -1,8 +1,25 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nginx-english-config
-  namespace: web
-data:
-  index.html: |
+---
+- name: Deploy English Nginx Dashboard
+  hosts: all
+  become: false
+  tasks:
+    - name: Apply ConfigMap and Ingress manifests from root
+      kubernetes.core.k8s:
+        state: present
+        src: "{{ item }}"
+      loop:
+        - ../configmap.yaml
+        - ../ingress.yaml
 
+    - name: Force restart Nginx Deployment to refresh ConfigMap
+      kubernetes.core.k8s:
+        state: patched
+        kind: Deployment
+        name: nginx-webserver
+        namespace: web
+        definition:
+          spec:
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
