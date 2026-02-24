@@ -1,0 +1,20 @@
+- name: Apply Kubernetes manifests for Dashboard and Ingress
+  kubernetes.core.k8s:
+    state: present
+    src: "{{ item }}"
+  loop:
+    - configmap.yaml
+    - ingress.yaml
+
+- name: Restart Nginx Webserver to apply ConfigMap changes
+  kubernetes.core.k8s:
+    state: patched
+    kind: Deployment
+    name: nginx-webserver
+    namespace: web
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
