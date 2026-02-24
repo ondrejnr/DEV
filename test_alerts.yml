@@ -1,0 +1,11 @@
+groups:
+- name: test-alert
+  rules:
+  - alert: KiadTestAlert
+    expr: vector(1)
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Test alert for KIAD simulation"
+      description: "This is a simulated alert for KIAD use-case"

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: monitoring
+data:
+  ingress_alerts.yml: |
+    groups:
+    - name: ingress_status
+      rules:
+      - alert: IngressControllerDown
+        expr: up{job="nginx-ingress-controller"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: Ingress Controller je DOWN"
+          description: "Nginx Ingress v namespace ingress-nginx prestal posielať metriky."
