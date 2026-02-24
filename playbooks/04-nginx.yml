@@ -1,9 +1,9 @@
 ---
-- name: Deploy Nginx Webserver
+- name: Deploy Nginx Webserver and Service
   hosts: all
   become: false
   tasks:
-    - name: Apply Nginx Webserver Manifests
+    - name: Apply Nginx Webserver Deployment
       kubernetes.core.k8s:
         state: present
         definition:
@@ -35,11 +35,7 @@
                 - name: config-volume
                   configMap:
                     name: nginx-english-config
----
-- name: Deploy Nginx Webserver Service
-  hosts: all
-  become: false
-  tasks:
+
     - name: Create Webserver Service
       kubernetes.core.k8s:
         state: present
