@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{},"name":"nginx-service","namespace":"web"},"spec":{"ports":[{"name":"http","port":80,"targetPort":80},{"name":"metrics","port":9113,"targetPort":9113}],"selector":{"app":"nginx-web"}}}
+  creationTimestamp: "2026-02-24T09:33:18Z"
+  name: nginx-service
+  namespace: web
+  resourceVersion: "8185"
+  uid: cf97ed40-f268-48a8-88c2-3726cc3a5711
+spec:
+  clusterIP: 10.108.146.241
+  clusterIPs:
+  - 10.108.146.241
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  - name: metrics
+    port: 9113
+    protocol: TCP
+    targetPort: 9113
+  selector:
+    app: nginx-web
+  sessionAffinity: None
+  type: ClusterIP
+status:
+  loadBalancer: {}

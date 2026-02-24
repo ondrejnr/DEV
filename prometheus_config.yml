@@ -1,0 +1,25 @@
+apiVersion: v1
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      - job_name: 'node-exporter'
+        static_configs:
+          - targets: ['node-exporter:9100']
+      - job_name: 'etcd'
+        static_configs:
+          - targets: ['etcd.database.svc.cluster.local:2379']
+kind: ConfigMap
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","data":{"prometheus.yml":"global:\n  scrape_interval: 15s\nscrape_configs:\n  - job_name: 'prometheus'\n    static_configs:\n      - targets: ['localhost:9090']\n  - job_name: 'node-exporter'\n    static_configs:\n      - targets: ['node-exporter:9100']\n  - job_name: 'etcd'\n    static_configs:\n      - targets: ['etcd.database.svc.cluster.local:2379']\n"},"kind":"ConfigMap","metadata":{"annotations":{},"name":"prometheus-config","namespace":"monitoring"}}
+  creationTimestamp: "2026-02-24T08:25:19Z"
+  name: prometheus-config
+  namespace: monitoring
+  resourceVersion: "2630"
+  uid: d155c218-d51f-4ceb-a1bd-7c300c91b325

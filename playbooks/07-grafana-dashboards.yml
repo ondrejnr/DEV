@@ -12,4 +12,3 @@
         overwrite: true
         org_id: 1
         dashboard_id: 1860
-        datasource: "Prometheus"
