@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: web
-        image: nginx:alpine # Stabilný image
+        image: ondrejnr1/dev-app:1.0.0 # {"$imagepolicy": "flux-system:dev-app-policy"}
         ports:
         - containerPort: 80
 ---
