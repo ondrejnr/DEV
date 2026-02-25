@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev-project
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dev-app
+  namespace: dev-project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dev-app
+  template:
+    metadata:
+      labels:
+        app: dev-app
+    spec:
+      containers:
+      - name: web
+        image: ondrejnr1/dev-app:latest # {"$imagepolicy": "flux-system:dev-app-policy"}
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dev-svc
+  namespace: dev-project
+spec:
+  selector:
+    app: dev-app
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
